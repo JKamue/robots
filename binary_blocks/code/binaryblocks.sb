@@ -1,0 +1,560 @@
+'BinaryBlocks Bot that Uses EV3 Basic
+'Copyright (C)  2019  Jannes Kaspar-Müller & Lucas McCully
+
+
+'################# Important Variables #################
+
+'The number the robot has to build
+'Set -1 to activate input phase in input subroutine
+number_to_built = -1
+'Max num of blocks the robot can carry
+max_transport_height = 5
+'Minimum acceptable charge of battery in percent
+min_bat = 50
+
+
+'#################### Functions #####################
+
+'go / no go poll
+'Parameters: None
+'Return: Go / No go
+'Possible Errors:
+'                             - Bat: Battery is not charged enough
+'                             - Sens[number1][number2] 
+'                                 Sensor Error; number1 = sensor Port; number2 = code
+'                                 number2 -> 1: missing; 2: wrong sensor; 3: couldn't change mode
+'                             -MOT[letter][number]
+'                                 Motor Error: letter = port
+'                                 number:> 1: missing
+
+Sub LAUNCH_STATUS_CHECK
+  'Checklist
+  'Variables
+  nogo = 0
+  lcd_line = 5
+  
+  '#####
+  '#LCD#
+  '#####  
+  LCD.Clear()
+  LCD.BmpFile(1,0,0,"img/startup")
+  
+  '#####
+  '#LED#
+  '#####  
+  EV3.SetLEDColor("OFF","Normal")
+  
+  '#####
+  '#BAT#
+  '#####  
+  if (EV3.BatteryLevel < min_bat) Then
+    LCD.write(10,lcd_line,"BAT")
+    lcd_line = lcd_line + 20
+    nogo = 1
+  EndIf
+  
+  '#####
+  '#BTN#
+  '#####  
+  Buttons.Flush()
+  
+  '############
+  '#MOTA-MOTD#
+  '############
+  motors[1] = "MOTA"
+  motors[2] = "MOTB"
+  motors[3] = "MOTC"
+  motors[4] = "MOTD"
+  
+  For motor = 1 To 4
+    stat = F.Call1("MOT",motor)
+    If (stat = 1) Then
+      LCD.write(10,lcd_line,motors[motor]+stat)
+      lcd_line = lcd_line + 20
+      nogo = 1
+    EndIf
+  EndFor
+  
+  '#######
+  '#SENS1 #
+  '####### 
+  'Sensor 1, Front Colorsensor
+  sensor1 = F.Call3("SENS",1,29,4)
+  If (sensor1 <> 0) Then
+    LCD.write(10,lcd_line,"SENS1"+sensor1)
+    lcd_line = lcd_line + 20
+    nogo = 1
+  EndIf
+  
+  '#######
+  '#SENS2#
+  '####### 
+  sensor2 = F.Call3("SENS",2,29,4)
+  If (sensor2 <> 0) Then
+    LCD.write(10,lcd_line,"SENS2"+sensor2)
+    lcd_line = lcd_line + 20
+    nogo = 1
+  EndIf
+  
+  '#######
+  '#SENS3#
+  '####### 
+  sensor3 = F.Call3("SENS",3,30,0)
+  If (sensor3 <> 0) Then
+    LCD.write(10,lcd_line,"SENS3"+sensor3)
+    lcd_line = lcd_line + 20
+    nogo = 1
+  EndIf
+  
+  If (nogo = 1) Then
+    EV3.SetLEDColor("Red","Flash")
+    Buttons.Wait()
+    Program.End()
+  EndIf
+  'Ready for Liftoff
+  LCD.BmpFile(1,0,0,"img/liftoff")
+EndSub
+
+'------------------------------------------------------------------------
+
+'Function to check if Motor is attached
+'Parameter: Port
+'Return: true / false
+'Description: Let Motor run slow for 100ms and check if it returns it speed
+
+F.Start = MOT
+F.Function("MOT","port")
+SUB MOT
+  letters[1] = "A"
+  letters[2] = "B"
+  letters[3] = "C"
+  letters[4] = "D"
+  
+  port = letters[F.Get("port")]
+  Motor.Start(port,20)
+  Program.Delay(100)
+  speed = Motor.GetCount(port)
+  Motor.Stop(port,"true")
+  If (speed = 0) Then
+    F.ReturnNumber(1)
+  EndIf
+  F.ReturnNumber(0)
+EndSub
+
+'-----------------------------------------------------------------------
+
+'Function to check if Sensor is attached
+'Parameter: Port, Type
+'Return: true / false
+
+F.START = SENS
+F.Function("SENS","port type mode")
+SUB SENS    
+  'Get Parameters
+  num = F.Get("port")
+  type = F.Get("type")
+  mode = F.Get("mode")
+  
+  'Query all data from the sensor
+  real_type = Sensor.getType(num)
+  real_name = Sensor.getName(num)
+  real_mode = Sensor.getMode(num)
+  
+  'Check if Sensor is connected
+  If (real_type = 126) Then
+    'Sensor not connected
+    F.ReturnNumber(1)
+  EndIf
+  
+  'Check if right Sensor is connected
+  If (real_type <> type) Then
+    'Wrong Sensor Connected
+    F.ReturnNumber(2)  
+  EndIf
+  
+  'Check if sensor is in right Mode
+  If (real_mode <> mode) Then
+    'TextWindow.WriteLine("Setting Mode")
+    'Set to right mode
+    Sensor.SetMode(num,mode)
+    'Check if mode really switched
+    if (mode <> Sensor.GetMode(num)) Then
+      'TextWindow.WriteLine("Failed")
+      F.ReturnNumber(3)
+    EndIf
+  EndIf
+  F.ReturnNumber(0)
+EndSub
+'-----------------------------------------------------------------------
+
+'Subroutine to convert a decimal number into a binary number
+'Parameters: Number
+'Return: Array with the 4 values
+
+Sub BIN
+  number = Byte.ToBinary(number_to_built)
+  length = Text.GetLength(number)
+
+  tmp[1] = Text.GetSubText(number,length,1)
+  tmp[2] = Text.GetSubText(number,length-1,1)
+  tmp[3] = Text.GetSubText(number,length-2,1)
+  tmp[4] = Text.GetSubText(number,length-3,1)
+  
+  For i=1 To 4
+    If (tmp[i] = "1") Then
+      binary[i] = 1
+    Else
+      binary[i] = 0
+    EndIf
+  EndFor
+EndSub
+
+'-------------------------------------------------------------------------
+
+'Subroutine to Input all Box Colors
+'Parameters: None
+'Return: Array [color first box; color second box; black boxes outside; white boxes outside]
+
+Sub INPUT
+  'To give th user a visual feedback
+  EV3.SetLEDColor("RED","normal")
+  
+  'Define variables
+  sounds[1] = "sound/white"
+  sounds[0] = "sound/black_loud"
+  
+  first_block = 0
+  second_block = 0
+  blacks = 2
+  whites = 0
+  
+  '#########################
+  'Inputting the color of the first block
+  '#########################
+  Speaker.Play(100, "sound/select_the_blocks")
+  
+  'Wait till a button is pressed and then get the input
+  Buttons.Wait()
+  status = Buttons.Current
+  
+  'There are only two options
+  'Scince the standart is black we know that it is white if any other button than enter is pressed
+  If (Text.IsSubText(status, "U") Or Text.IsSubText(status, "D") Or Text.IsSubText(status, "L") Or Text.IsSubText(status, "R"))  then
+    first_block = 1  
+  Endif
+  
+  Speaker.Play(100, sounds[first_block])
+  EV3.SetLEDColor("ORANGE","normal")
+  Buttons.Flush()
+  
+  '########################
+  'Inputting color of the second block
+  '########################
+
+  'Wait till a button is pressed and then get the input
+  Buttons.Wait()
+  status = Buttons.Current
+
+  'There are only two options
+  'Scince the standart is black we know that it is white if any other button than enter is pressed
+  If (Text.IsSubText(status, "U") Or Text.IsSubText(status, "D") Or Text.IsSubText(status, "L") Or Text.IsSubText(status, "R"))  then
+    second_block = 1  
+  Endif
+  Speaker.Play(100, sounds[second_block])
+  EV3.SetLEDColor("GREEN","normal")
+
+  Buttons.Flush()
+  
+  '###############################
+  'Inputting number of black blocks on the side
+  '###############################
+  
+  Buttons.Flush()
+  Buttons.Wait()
+  status = Buttons.Current
+  
+  While status <> "E"
+    status = Buttons.Current
+    If Text.IsSubText(status, "U") And (blacks < 5) Then
+      Buttons.Flush()
+      blacks = blacks + 1
+    ElseIf Text.IsSubText(status, "D") and (blacks > 1) Then
+      Buttons.Flush()
+      blacks = blacks - 1
+    EndIf
+    Speaker.Play(100, "sound/"+blacks)
+    Buttons.Wait()
+  EndWhile
+  
+  '###############################
+  'Inputting the number that we want to build
+  '###############################
+  
+  If (number_to_built = -1) Then
+    Buttons.Flush()
+    Buttons.Wait()
+    status = Buttons.Current
+    
+    number_to_built = 7
+    BIN()
+    
+      LCD.Text(1,70,20,2,number_to_built)
+      LCD.Text(1,30,50,2,tmp[4])
+      LCD.Text(1,50,50,2,tmp[3])
+      LCD.Text(1,70,50,2,tmp[2])
+      LCD.Text(1,90,50,2,tmp[1])
+    
+    While status <> "E" 
+      status = Buttons.Current
+      If Text.IsSubText(status, "U") And (number_to_built < 15) Then
+        Buttons.Flush()
+        number_to_built = number_to_built + 1
+      ElseIf Text.IsSubText(status, "D") and (number_to_built > -1) Then
+        Buttons.Flush()
+        number_to_built = number_to_built - 1
+      EndIf
+      BIN()
+      LCD.Text(1,70,20,2,number_to_built)
+      LCD.Text(1,30,50,2,tmp[4])
+      LCD.Text(1,50,50,2,tmp[3])
+      LCD.Text(1,70,50,2,tmp[2])
+      LCD.Text(1,90,50,2,tmp[1])
+      Buttons.Wait()
+    EndWhile
+  EndIf
+  
+  whites = 5-blacks
+  
+  'return[0] = first_block
+  'return[1] = second_block
+  'return[2] = blacks
+  'return[3] = whites
+  
+EndSub
+
+'------------------------------------------------------------------------
+
+'Function to produce an array with the block placement
+
+Sub SORT
+  'Find out the total number of black blocks and the total number of white blocks
+  
+  
+  total_black = blacks
+  total_white = whites
+  
+  if (first_block = 1) Then
+    total_white= total_white + 1
+  Else
+    total_black = total_black + 1
+  EndIf
+  
+  if (second_block = 1) Then
+    total_white = total_white + 1
+  Else
+    total_black = total_black + 1
+  EndIf
+  
+  'Get the MSB for each color
+  MSB[0] = 0
+  MSB[1] = 0
+  
+  For i=1 To 4
+      MSB[binary[i]] = i
+  EndFor
+  
+  'Calculate "map"
+  rest_white = total_white
+  rest_black = total_black
+  
+  for i=1 To 4
+    if (binary[i] = 1) Then
+      slots[i] = 1
+      rest_white = rest_white-1
+    Else
+      slots[i] = -1
+      rest_black = rest_black-1
+    EndIf    
+  EndFor
+  
+  slots[MSB[0]] = slots[MSB[0]] - rest_black
+  slots[MSB[1]] = slots[MSB[1]] + rest_white
+  
+  If ( first_block = 0) Then
+    first_block = -1
+  EndIf
+  
+  If ( second_block = 0) Then
+    second_block = -1
+  EndIf
+  
+  slots_rest = slots
+  slots_placed[1] = 0
+  slots_placed[2] = 0
+  slots_placed[3] = 0
+  slots_placed[4] = 0
+  
+  TextWindow.WriteLine(binary)
+  TextWindow.WriteLine("first_block "+first_block)
+  TextWindow.WriteLine("second_block "+second_block)
+  TextWindow.WriteLine("blacks "+blacks)
+  TextWindow.WriteLine("whites "+whites)
+  TextWindow.WriteLine("Black MSB " + MSB[0])
+  TextWindow.WriteLine("White MSB " + MSB[1])
+  TextWindow.WriteLine(slots)
+ 
+
+  
+EndSub
+
+'-------------------------------------------------------------------
+
+'Function to output the blocks on the display
+Sub SHOW
+  LCD.Clear()
+  
+  startX = 100
+  startY = 8
+  gap = 8
+  blockLength = 32
+  For i=1 To 4
+    If (slots[5-i] < 0) Then
+      black = "true"
+      num = -1*slots[5-i]
+    Else
+      black = "false"
+      num = slots[5-i]
+    EndIf
+    
+    For a=1 To num
+      If (slots[5-i] < 0) Then
+        LCD.FillRect(1,startY+(i-1)*blockLength+(i-1)*gap,startX-(a-1)*2-(a-1)*blockLength,blockLength,blockLength)
+      Else
+        LCD.Rect(1,startY+(i-1)*blockLength+(i-1)*gap,startX-(a-1)*2-(a-1)*blockLength,blockLength,blockLength)
+      EndIf 
+    EndFor  
+  EndFor
+EndSub
+
+'-------------------------------------------------------------------
+
+'Function to set First Block
+
+Sub SETFIRST
+  If (first_block = slots[3]) Then
+    slot = 3
+  ElseIf (first_block = slots[2] and second_block = slots[1]) Then
+    slot = 2
+  ElseIf (first_block = slots[4]) Then
+    slot = 4
+  ElseIf (first_block = slots[2]) Then
+    slot = 2
+  ElseIf (first_block = slots[1]) Then
+    slot = 1
+  Else
+    If (first_block = 1) Then
+      If (first_block < slots[4]) Then
+        slot = 4
+      ElseIf (first_block < slots[1]) Then
+        slot = 1
+      ElseIf (first_block < slots[3]) Then
+        slot = 3
+      ElseIf (first_block < slots[2]) Then
+        slot = 2
+      EndIf
+    Else
+      If (first_block > slots[4]) Then
+        slot = 4
+      ElseIf (first_block > slots[1]) Then
+        slot = 1
+      ElseIf (first_block > slots[3]) Then
+        slot = 3
+      ElseIf (first_block > slots[2]) Then
+        slot = 2
+      EndIf
+    EndIf
+  EndIf
+  
+  slots_rest[slot] = slots_rest[slot] - first_block
+  slots_placed[slot] = 1
+  
+  TextWindow.WriteLine("First Block Slot "+slot)
+  'TextWindow.WriteLine("Slot map now: "+slots_placed)
+  'TextWindow.WriteLine("Remaining: "+slots_rest)
+EndSub
+
+'Function to set second block
+
+Sub SETSECOND
+  If (second_block = slots_rest[1]) Then
+    slot = 1
+  ElseIf (second_block = slots_rest[2]) Then
+   slot = 2
+  ElseIf (second_block = slots_rest[3]) Then
+   slot = 3
+ ElseIf (second_block = slots_rest[4]) Then
+    slot = 4
+  Else
+    If (second_block = 1) Then
+      If (second_block < slots_rest[1]) Then
+        slot = 1
+      ElseIf (second_block< slots_rest[2]) Then
+        slot = 2
+      ElseIf (second_block < slots_rest[3]) Then
+        slot = 3
+      ElseIf (second_block < slots_rest[4]) Then
+        slot = 4
+      EndIf
+    Else
+      If (second_block > slots_rest[1]) Then
+        slot = 1
+      ElseIf (second_block > slots_rest[2]) Then
+        slot = 2
+      ElseIf (second_block > slots_rest[3]) Then
+        slot = 3
+      ElseIf (second_block > slots_rest[4]) Then
+        slot = 4
+      EndIf
+    EndIf
+  EndIf
+  
+  slots_rest[slot] = slots_rest[slot] - second_block
+  slots_placed[slot] = slots_placed[slot] + 1
+  
+  TextWindow.WriteLine("Second Block Slot "+slot)
+EndSub 
+
+'Function to set al remaining blocks
+
+Sub SETREST
+  For i=1 To 4
+    If (slots_rest[i] <> 0) Then
+      tobring = slots_rest[i]
+      
+      If (tobring < 0) Then
+        drives = Math.Ceiling(tobring*-1 / max_transport_height)
+        color = "black"
+        tobring = tobring * -1
+      Else
+        color = "white"
+        drives = Math.Ceiling(tobring / max_transport_height)
+      EndIf
+      
+      TextWindow.WriteLine("Drive "+drives+" times to "+i+" and bring "+tobring+" "+color+" blocks")
+    EndIf
+  EndFor
+EndSub
+
+'##################### Program ######################
+
+LAUNCH_STATUS_CHECK()
+INPUT()
+BIN()
+SORT()
+SHOW()
+SETFIRST()
+SETSECOND()
+SETREST()
+'TextWindow.WriteLine(return)
+'LCD.Write(10,10,return[3]+return[2]+return[1]+return[0])
+Program.Delay(10000)
