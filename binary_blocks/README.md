@@ -14,3 +14,4 @@ Sensors
 1. Front Color Sensor
 2. Back  Color Sensor
 3. Distance Sensor	
+4. Touch Sensor (Kill switch)

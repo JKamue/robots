@@ -4,14 +4,20 @@
 
 '################# Important Variables #################
 
-'The number the robot has to build
-'Set -1 to activate input phase in input subroutine
+'The number the robot has to build - Set -1 to activate input phase in input subroutine
 number_to_built = -1
 'Max num of blocks the robot can carry
 max_transport_height = 5
 'Minimum acceptable charge of battery in percent
 min_bat = 50
 
+'Maximum forward speed
+max_speed = 40
+'Maximum backward speed
+max_back_speed = -35
+
+'Max back turn speed (one wheel turn)
+max_back_turn = -100
 
 '#################### Functions #####################
 
@@ -106,15 +112,38 @@ Sub LAUNCH_STATUS_CHECK
     nogo = 1
   EndIf
   
+  '#######
+  '#SENS4#
+  '####### 
+  sensor4 = F.Call3("SENS",4,16,0)
+  If (sensor4 <> 0) Then
+    LCD.write(10,lcd_line,"SENS4"+sensor4)
+    lcd_line = lcd_line + 20
+    nogo = 1
+  EndIf  
+  
   If (nogo = 1) Then
     EV3.SetLEDColor("Red","Flash")
     Buttons.Wait()
     Program.End()
   EndIf
   'Ready for Liftoff
+  Thread.Run = KILLSWITCH
   LCD.BmpFile(1,0,0,"img/liftoff")
 EndSub
 
+'------------------------------------------------------------------------
+
+'Subroutine for the killswitch
+
+Sub KILLSWITCH
+  While (1 = 1)
+    If (Sensor.ReadPercent(4) = 100) Then
+      Program.End()
+    EndIf
+  Program.Delay(50)
+  EndWhile
+EndSub
 '------------------------------------------------------------------------
 
 'Function to check if Motor is attached
@@ -394,14 +423,14 @@ Sub SORT
   slots_placed[3] = 0
   slots_placed[4] = 0
   
-  TextWindow.WriteLine(binary)
-  TextWindow.WriteLine("first_block "+first_block)
-  TextWindow.WriteLine("second_block "+second_block)
-  TextWindow.WriteLine("blacks "+blacks)
-  TextWindow.WriteLine("whites "+whites)
-  TextWindow.WriteLine("Black MSB " + MSB[0])
-  TextWindow.WriteLine("White MSB " + MSB[1])
-  TextWindow.WriteLine(slots)
+  'TextWindow.WriteLine(binary)
+  'TextWindow.WriteLine("first_block "+first_block)
+  'TextWindow.WriteLine("second_block "+second_block)
+  'TextWindow.WriteLine("blacks "+blacks)
+  'TextWindow.WriteLine("whites "+whites)
+  'TextWindow.WriteLine("Black MSB " + MSB[0])
+  'TextWindow.WriteLine("White MSB " + MSB[1])
+  'TextWindow.WriteLine(slots)
  
 
   
@@ -476,9 +505,59 @@ Sub SETFIRST
   EndIf
   
   slots_rest[slot] = slots_rest[slot] - first_block
-  slots_placed[slot] = 1
+  slots_placed[slot] = 1      
   
-  TextWindow.WriteLine("First Block Slot "+slot)
+  LEAVESTART()
+
+  Program.Delay(250)
+ 
+ 'Wiggle
+ While (Sensor.ReadRawValue(3,0) > 54)
+   drive_speed = 40
+   While (F.Call1("ISLINE",2) = 2 And Sensor.ReadRawValue(3,0) > 54)
+     Motor.StartSteer("AD",drive_speed,30)
+   EndWhile
+   While (F.Call1("ISLINE",2) <> 2  And Sensor.ReadRawValue(3,0) > 54)
+     Motor.StartSteer("AD",drive_speed,-7)
+   EndWhile
+ EndWhile   
+ Motor.Stop("AD","true")
+ 
+ 'Grab block
+ F.Call0("GRAB")
+ Motor.Move("B",50,100,"true")
+ 
+ 'Drive till black Line
+ line = "false"
+ While (line = "false")
+   If (F.Call1("ISLINE",2) = 2) Then
+     if (EV3.Time < time + 500) Then
+      line = "true"
+     EndIf
+     Motor.StartSteer("AD",35,30)
+   Elseif (F.Call1("ISLINE",2) = 0) Then
+     Motor.StartSteer("AD",35,-7)
+   EndIf
+   If (F.Call1("ISLINE",1) = 1) Then
+     time = EV3.Time
+   EndIf
+ EndWhile   
+ Motor.Stop("AD","true")
+ 
+ 'We are now standing with the robot in slot 4
+ If (slot = 4) Then
+   'Backoff
+   Motor.StartSteer("AD",max_back_speed,10)
+   Program.Delay(900)
+   Motor.Stop("AD","true")
+   Motor.Move("B",-50,100,"false")
+   F.Call0("RELEASE")
+ EndIf
+   Motor.StartSteer("AD",max_back_speed,-5)
+   Program.Delay(300)
+   Motor.Stop("AD","true")
+   
+  'TextWindow.WriteLine("First Block Slot "+slot)
   'TextWindow.WriteLine("Slot map now: "+slots_placed)
   'TextWindow.WriteLine("Remaining: "+slots_rest)
 EndSub
@@ -521,10 +600,12 @@ Sub SETSECOND
   slots_rest[slot] = slots_rest[slot] - second_block
   slots_placed[slot] = slots_placed[slot] + 1
   
-  TextWindow.WriteLine("Second Block Slot "+slot)
+  'TextWindow.WriteLine("Second Block Slot "+slot)
 EndSub 
 
-'Function to set al remaining blocks
+'-------------------------------------------------------------------
+
+'Function to set all remaining blocks
 
 Sub SETREST
   For i=1 To 4
@@ -540,21 +621,106 @@ Sub SETREST
         drives = Math.Ceiling(tobring / max_transport_height)
       EndIf
       
-      TextWindow.WriteLine("Drive "+drives+" times to "+i+" and bring "+tobring+" "+color+" blocks")
+      'TextWindow.WriteLine("Drive "+drives+" times to "+i+" and bring "+tobring+" "+color+" blocks")
     EndIf
   EndFor
 EndSub
 
+'-------------------------------------------------------------------
+
+'FUnction to leave the start area and align to edge
+
+Sub LEAVESTART
+  'Drive till the first edge
+  Motor.StartSteer("AD",max_speed,0) 
+  While (F.Call1("ISLINE",2) <> 2)
+  EndWhile  
+  Motor.Stop("AD","true")
+  
+  'Turn try #2
+  For i = 1 To 360 Step 40
+    If (F.Call1("ISLINE",1) <> 2) Then
+      Motor.Move("D",-60,-40,"true")
+    Elseif (F.Call1("ISLINE",2) = 2) then
+        i = 1000
+      
+        'Set Straight
+        Motor.Start("D",-65)
+        While (F.Call1("ISLINE",2) = 2)
+        EndWhile
+        Motor.Stop("AD","true")
+      
+    Else
+        i = 1000
+        
+        'Drive to Edge
+        Motor.Start("AD",40)
+        While (F.Call1("ISLINE",2) <> 2)
+        EndWhile
+        Motor.Stop("AD","true") 
+      
+        'Set Straight
+        Motor.Start("D",-65)
+        While (F.Call1("ISLINE",2) = 2)
+        EndWhile
+        Motor.Stop("AD","true")     
+    EndIf
+  EndFor  
+  
+EndSub
+
+'Function to fetch & evaluate sensor results
+
+F.Start = ISLINE
+F.Function("ISLINE","port r g b")
+Sub ISLINE
+  F.Set("r",Sensor.ReadRawValue(F.Get("port"),0))
+  F.Set("g",Sensor.ReadRawValue(F.Get("port"),1))
+  F.Set("b",Sensor.ReadRawValue(F.Get("port"),2))
+  If ((F.get("r") + F.get("g") + F.get("b") < 40) Or F.get("r") > 500 Or F.get("g") > 500 Or F.get("b") > 500) Then
+    F.ReturnNumber(2)  
+  ElseIf (F.get("r") < 40 and F.get("g") < 40 and F.get("b") < 40) Then
+    F.ReturnNumber(1)  
+  Else
+    F.ReturnNumber(0)  
+  EndIf
+EndSub
+
+'-------------------------------------------------------------------
+
+'Function to grab a block
+
+F.Start = GRAB
+F.Function("GRAB","")
+Sub GRAB
+   Motor.Move("C",-100,2160,"true")
+   Motor.Wait("C")
+EndSub
+
+'-------------------------------------------------------------------
+
+'Function to release a block
+
+F.Start = RELEASE
+F.Function("RELEASE","")
+Sub RELEASE
+   Motor.Move("C",100,2000,"false")
+   Motor.Wait("C")
+EndSub
+
+
 '##################### Program ######################
 
-LAUNCH_STATUS_CHECK()
-INPUT()
-BIN()
-SORT()
-SHOW()
-SETFIRST()
-SETSECOND()
-SETREST()
+LAUNCH_STATUS_CHECK() 'Check if everything operational
+INPUT()               'Get Box Colors/Amounts
+BIN()                 'Convert the number to decimal
+SORT()                'Make Plan
+SHOW()                'Show Plan
+Program.Delay(1000)
+SETFIRST()            'Set first block
+SETSECOND()           'Set second block
+SETREST()             'Set all other blocks
+'LEAVESTART()
 'TextWindow.WriteLine(return)
 'LCD.Write(10,10,return[3]+return[2]+return[1]+return[0])
 Program.Delay(10000)
