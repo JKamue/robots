@@ -528,10 +528,11 @@ Sub SETFIRST
  Motor.Move("B",50,100,"true")
  
  'Drive till black Line
+ time = 0
  line = "false"
  While (line = "false")
    If (F.Call1("ISLINE",2) = 2) Then
-     if (EV3.Time < time + 500) Then
+     if (EV3.Time < (time + 500)) Then
       line = "true"
      EndIf
      Motor.StartSteer("AD",35,30)
@@ -550,12 +551,47 @@ Sub SETFIRST
    Motor.StartSteer("AD",max_back_speed,10)
    Program.Delay(900)
    Motor.Stop("AD","true")
-   Motor.Move("B",-50,100,"false")
+   Motor.Move("B",-50,90,"false")
    F.Call0("RELEASE")
- EndIf
    Motor.StartSteer("AD",max_back_speed,-5)
    Program.Delay(300)
    Motor.Stop("AD","true")
+ ElseIf (slot = 3) Then
+   'Place block in second slot
+   For i = 1 To 380 Step 20 
+      Motor.Move("A",-60,20,"true")
+   EndFor
+
+   Motor.Move("AD",-35,400,"true")
+   
+   Motor.Move("B",-50,90,"false")
+   F.Call0("RELEASE")
+   Motor.Move("AD",-35,400,"true")
+ ElseIf (slot = 2) Then
+     'Place block in second slot
+   For i = 1 To 360 Step 40 
+      Motor.Move("A",-60,40,"true")
+   EndFor
+   
+   Motor.Move("AD",-35,800,"true")
+   
+   Motor.Move("B",-50,90,"false")
+   F.Call0("RELEASE")  
+ EndIf
+ 
+ If (slot = 2 Or slot = 3) Then
+   Motor.Move("B",60,500,"false")
+   For i = 1 To 180 Step 20 
+     If (F.Call1("ISLINE",1) <> 2) Then
+       Motor.MoveSteer("AD",-35,100,20,"false")
+     Else
+       Motor.Start("AD",50)
+       'Make this to a while loop
+       'WHILE SENSOR FRONT DOESNT DETECT LINE DRIVE FORWARD
+       Program.Delay(100)  
+     EndIf
+   EndFor
+ EndIf 
    
   'TextWindow.WriteLine("First Block Slot "+slot)
   'TextWindow.WriteLine("Slot map now: "+slots_placed)
