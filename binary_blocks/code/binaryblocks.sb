@@ -1,7 +1,6 @@
 'BinaryBlocks Bot that Uses EV3 Basic
 'Copyright (C)  2019  Jannes Kaspar-Müller & Lucas McCully
 
-
 '################# Important Variables #################
 
 'The number the robot has to build - Set -1 to activate input phase in input subroutine
@@ -26,7 +25,7 @@ max_back_turn = -100
 'Return: Go / No go
 'Possible Errors:
 '                             - Bat: Battery is not charged enough
-'                             - Sens[number1][number2] 
+'                             - Sens[number1][number2]
 '                                 Sensor Error; number1 = sensor Port; number2 = code
 '                                 number2 -> 1: missing; 2: wrong sensor; 3: couldn't change mode
 '                             -MOT[letter][number]
@@ -41,19 +40,19 @@ Sub LAUNCH_STATUS_CHECK
   
   '#####
   '#LCD#
-  '#####  
+  '#####
   LCD.Clear()
   LCD.BmpFile(1,0,0,"img/startup")
   
   '#####
   '#LED#
-  '#####  
+  '#####
   EV3.SetLEDColor("OFF","Normal")
   
   '#####
   '#BAT#
-  '#####  
-  if (EV3.BatteryLevel < min_bat) Then
+  '#####
+  If (EV3.BatteryLevel < min_bat) Then
     LCD.write(10,lcd_line,"BAT")
     lcd_line = lcd_line + 20
     nogo = 1
@@ -61,7 +60,7 @@ Sub LAUNCH_STATUS_CHECK
   
   '#####
   '#BTN#
-  '#####  
+  '#####
   Buttons.Flush()
   
   '############
@@ -83,7 +82,7 @@ Sub LAUNCH_STATUS_CHECK
   
   '#######
   '#SENS1 #
-  '####### 
+  '#######
   'Sensor 1, Front Colorsensor
   sensor1 = F.Call3("SENS",1,29,4)
   If (sensor1 <> 0) Then
@@ -94,7 +93,7 @@ Sub LAUNCH_STATUS_CHECK
   
   '#######
   '#SENS2#
-  '####### 
+  '#######
   sensor2 = F.Call3("SENS",2,29,4)
   If (sensor2 <> 0) Then
     LCD.write(10,lcd_line,"SENS2"+sensor2)
@@ -104,7 +103,7 @@ Sub LAUNCH_STATUS_CHECK
   
   '#######
   '#SENS3#
-  '####### 
+  '#######
   sensor3 = F.Call3("SENS",3,30,0)
   If (sensor3 <> 0) Then
     LCD.write(10,lcd_line,"SENS3"+sensor3)
@@ -114,16 +113,17 @@ Sub LAUNCH_STATUS_CHECK
   
   '#######
   '#SENS4#
-  '####### 
+  '#######
   sensor4 = F.Call3("SENS",4,16,0)
   If (sensor4 <> 0) Then
     LCD.write(10,lcd_line,"SENS4"+sensor4)
     lcd_line = lcd_line + 20
     nogo = 1
-  EndIf  
+  EndIf
   
   If (nogo = 1) Then
     EV3.SetLEDColor("Red","Flash")
+    Speaker.Play(100, "sound/abort")
     Buttons.Wait()
     Program.End()
   EndIf
@@ -141,7 +141,7 @@ Sub KILLSWITCH
     If (Sensor.ReadPercent(4) = 100) Then
       Program.End()
     EndIf
-  Program.Delay(50)
+    Program.Delay(50)
   EndWhile
 EndSub
 '------------------------------------------------------------------------
@@ -153,7 +153,7 @@ EndSub
 
 F.Start = MOT
 F.Function("MOT","port")
-SUB MOT
+Sub MOT
   letters[1] = "A"
   letters[2] = "B"
   letters[3] = "C"
@@ -178,7 +178,7 @@ EndSub
 
 F.START = SENS
 F.Function("SENS","port type mode")
-SUB SENS    
+Sub SENS
   'Get Parameters
   num = F.Get("port")
   type = F.Get("type")
@@ -198,7 +198,7 @@ SUB SENS
   'Check if right Sensor is connected
   If (real_type <> type) Then
     'Wrong Sensor Connected
-    F.ReturnNumber(2)  
+    F.ReturnNumber(2)
   EndIf
   
   'Check if sensor is in right Mode
@@ -207,7 +207,7 @@ SUB SENS
     'Set to right mode
     Sensor.SetMode(num,mode)
     'Check if mode really switched
-    if (mode <> Sensor.GetMode(num)) Then
+    If (mode <> Sensor.GetMode(num)) Then
       'TextWindow.WriteLine("Failed")
       F.ReturnNumber(3)
     EndIf
@@ -223,7 +223,7 @@ EndSub
 Sub BIN
   number = Byte.ToBinary(number_to_built)
   length = Text.GetLength(number)
-
+  
   tmp[1] = Text.GetSubText(number,length,1)
   tmp[2] = Text.GetSubText(number,length-1,1)
   tmp[3] = Text.GetSubText(number,length-2,1)
@@ -268,9 +268,9 @@ Sub INPUT
   
   'There are only two options
   'Scince the standart is black we know that it is white if any other button than enter is pressed
-  If (Text.IsSubText(status, "U") Or Text.IsSubText(status, "D") Or Text.IsSubText(status, "L") Or Text.IsSubText(status, "R"))  then
-    first_block = 1  
-  Endif
+  If (Text.IsSubText(status, "U") Or Text.IsSubText(status, "D") Or Text.IsSubText(status, "L") Or Text.IsSubText(status, "R"))  Then
+    first_block = 1
+  EndIf
   
   Speaker.Play(100, sounds[first_block])
   EV3.SetLEDColor("ORANGE","normal")
@@ -279,19 +279,19 @@ Sub INPUT
   '########################
   'Inputting color of the second block
   '########################
-
+  
   'Wait till a button is pressed and then get the input
   Buttons.Wait()
   status = Buttons.Current
-
+  
   'There are only two options
   'Scince the standart is black we know that it is white if any other button than enter is pressed
-  If (Text.IsSubText(status, "U") Or Text.IsSubText(status, "D") Or Text.IsSubText(status, "L") Or Text.IsSubText(status, "R"))  then
-    second_block = 1  
-  Endif
+  If (Text.IsSubText(status, "U") Or Text.IsSubText(status, "D") Or Text.IsSubText(status, "L") Or Text.IsSubText(status, "R"))  Then
+    second_block = 1
+  EndIf
   Speaker.Play(100, sounds[second_block])
   EV3.SetLEDColor("GREEN","normal")
-
+  
   Buttons.Flush()
   
   '###############################
@@ -327,13 +327,13 @@ Sub INPUT
     number_to_built = 7
     BIN()
     
-      LCD.Text(1,70,20,2,number_to_built)
-      LCD.Text(1,30,50,2,tmp[4])
-      LCD.Text(1,50,50,2,tmp[3])
-      LCD.Text(1,70,50,2,tmp[2])
-      LCD.Text(1,90,50,2,tmp[1])
+    LCD.Text(1,70,20,2,number_to_built)
+    LCD.Text(1,30,50,2,tmp[4])
+    LCD.Text(1,50,50,2,tmp[3])
+    LCD.Text(1,70,50,2,tmp[2])
+    LCD.Text(1,90,50,2,tmp[1])
     
-    While status <> "E" 
+    While status <> "E"
       status = Buttons.Current
       If Text.IsSubText(status, "U") And (number_to_built < 15) Then
         Buttons.Flush()
@@ -368,17 +368,16 @@ EndSub
 Sub SORT
   'Find out the total number of black blocks and the total number of white blocks
   
-  
   total_black = blacks
   total_white = whites
   
-  if (first_block = 1) Then
+  If (first_block = 1) Then
     total_white= total_white + 1
   Else
     total_black = total_black + 1
   EndIf
   
-  if (second_block = 1) Then
+  If (second_block = 1) Then
     total_white = total_white + 1
   Else
     total_black = total_black + 1
@@ -389,21 +388,21 @@ Sub SORT
   MSB[1] = 0
   
   For i=1 To 4
-      MSB[binary[i]] = i
+    MSB[binary[i]] = i
   EndFor
   
   'Calculate "map"
   rest_white = total_white
   rest_black = total_black
   
-  for i=1 To 4
-    if (binary[i] = 1) Then
+  For i=1 To 4
+    If (binary[i] = 1) Then
       slots[i] = 1
       rest_white = rest_white-1
     Else
       slots[i] = -1
       rest_black = rest_black-1
-    EndIf    
+    EndIf
   EndFor
   
   slots[MSB[0]] = slots[MSB[0]] - rest_black
@@ -431,8 +430,6 @@ Sub SORT
   'TextWindow.WriteLine("Black MSB " + MSB[0])
   'TextWindow.WriteLine("White MSB " + MSB[1])
   'TextWindow.WriteLine(slots)
- 
-
   
 EndSub
 
@@ -460,8 +457,8 @@ Sub SHOW
         LCD.FillRect(1,startY+(i-1)*blockLength+(i-1)*gap,startX-(a-1)*2-(a-1)*blockLength,blockLength,blockLength)
       Else
         LCD.Rect(1,startY+(i-1)*blockLength+(i-1)*gap,startX-(a-1)*2-(a-1)*blockLength,blockLength,blockLength)
-      EndIf 
-    EndFor  
+      EndIf
+    EndFor
   EndFor
 EndSub
 
@@ -505,94 +502,144 @@ Sub SETFIRST
   EndIf
   
   slots_rest[slot] = slots_rest[slot] - first_block
-  slots_placed[slot] = 1      
+  slots_placed[slot] = 1
   
   LEAVESTART()
-
-  Program.Delay(250)
- 
- 'Wiggle
- While (Sensor.ReadRawValue(3,0) > 54)
-   drive_speed = 40
-   While (F.Call1("ISLINE",2) = 2 And Sensor.ReadRawValue(3,0) > 54)
-     Motor.StartSteer("AD",drive_speed,30)
-   EndWhile
-   While (F.Call1("ISLINE",2) <> 2  And Sensor.ReadRawValue(3,0) > 54)
-     Motor.StartSteer("AD",drive_speed,-7)
-   EndWhile
- EndWhile   
- Motor.Stop("AD","true")
- 
- 'Grab block
- F.Call0("GRAB")
- Motor.Move("B",50,100,"true")
- 
- 'Drive till black Line
- time = 0
- line = "false"
- While (line = "false")
-   If (F.Call1("ISLINE",2) = 2) Then
-     if (EV3.Time < (time + 500)) Then
-      line = "true"
-     EndIf
-     Motor.StartSteer("AD",35,30)
-   Elseif (F.Call1("ISLINE",2) = 0) Then
-     Motor.StartSteer("AD",35,-7)
-   EndIf
-   If (F.Call1("ISLINE",1) = 1) Then
-     time = EV3.Time
-   EndIf
- EndWhile   
- Motor.Stop("AD","true")
- 
- 'We are now standing with the robot in slot 4
- If (slot = 4) Then
-   'Backoff
-   Motor.StartSteer("AD",max_back_speed,10)
-   Program.Delay(900)
-   Motor.Stop("AD","true")
-   Motor.Move("B",-50,90,"false")
-   F.Call0("RELEASE")
-   Motor.StartSteer("AD",max_back_speed,-5)
-   Program.Delay(300)
-   Motor.Stop("AD","true")
- ElseIf (slot = 3) Then
-   'Place block in second slot
-   For i = 1 To 380 Step 20 
-      Motor.Move("A",-60,20,"true")
-   EndFor
-
-   Motor.Move("AD",-35,400,"true")
-   
-   Motor.Move("B",-50,90,"false")
-   F.Call0("RELEASE")
-   Motor.Move("AD",-35,400,"true")
- ElseIf (slot = 2) Then
-     'Place block in second slot
-   For i = 1 To 360 Step 40 
+  
+  Program.Delay(200)
+  
+  'Wiggle
+  While (Sensor.ReadRawValue(3,0) > 54)
+    drive_speed = 40
+    While (F.Call1("ISLINE",2) = 2 And Sensor.ReadRawValue(3,0) > 54)
+      Motor.StartSteer("AD",drive_speed,30)
+    EndWhile
+    While (F.Call1("ISLINE",2) <> 2  And Sensor.ReadRawValue(3,0) > 54)
+      Motor.StartSteer("AD",drive_speed,-7)
+    EndWhile
+  EndWhile
+  Motor.Stop("AD","true")
+  
+  'Grab block
+  F.Call0("GRAB")
+  Motor.Move("B",50,100,"true")
+  
+  'Drive till black Line
+  time = 0
+  line = "false"
+  While (line = "false")
+    If (F.Call1("ISLINE",2) <> 0) Then
+      If (EV3.Time < (time + 500)) Then
+        line = "true"
+      EndIf
+      Motor.StartSteer("AD",35,30)
+    ElseIf (F.Call1("ISLINE",2) = 0) Then
+      Motor.StartSteer("AD",35,-7)
+    EndIf
+    If (F.Call1("ISLINE",1) = 1) Then
+      time = EV3.Time
+    EndIf
+  EndWhile
+  Motor.Stop("AD","true")
+  
+  'We are now standing with the robot in slot 4
+  If (slot = 4) Then
+    'Backoff
+    Motor.StartSteer("AD",max_back_speed,10)
+    Program.Delay(900)
+    Motor.Stop("AD","true")
+    
+    'Place Block
+    Motor.Move("B",-50,90,"false")
+    F.Call0("RELEASE")
+    
+    'Move back
+    Motor.StartSteer("AD",max_back_speed,-5)
+    Program.Delay(500)
+    Motor.Stop("AD","true")
+    
+    'Rotate
+    Motor.MoveSteer("AD",max_speed,100,200,"false")
+    
+    Motor.StartSync("AD",max_speed,max_speed)
+    While (F.Call1("ISLINE",2) <> 2)
+    EndWhile
+    Motor.Stop("AD","false")
+    
+  ElseIf (slot = 3) Then
+    'Place block in second slot
+    
+    'Turn around
+    Motor.Move("A",-60,395,"true")
+    
+    'Back to slot 2
+    Motor.Move("AD",-35,400,"true")
+    
+    'Release block into slot 2
+    Motor.Move("B",-50,80,"false")
+    F.Call0("RELEASE")
+    
+    'Back to the edge
+    Motor.Start("AD",-35)
+    While (F.Call1("ISLINE",1) <> 2)
+    EndWhile
+    Motor.stop("AD","false")
+    
+    'Tuuurrnn aroouuuunndd
+    Motor.MoveSteer("AD",-35,100,170,"false")
+    
+  ElseIf (slot = 2) Then
+    'Place block in second slot
+    For i = 1 To 360 Step 40
       Motor.Move("A",-60,40,"true")
-   EndFor
+    EndFor
+    
+    Motor.Move("AD",-35,750,"true")
+    
+    Motor.Move("B",-50,90,"false")
+    F.Call0("RELEASE")
+    
+    Motor.Start("AD",-35)
+    While (F.Call1("ISLINE",1) <> 2)
+    EndWhile
+    Motor.stop("AD","false")
+    
+    Motor.Move("B",60,500,"false")
+    
+    Motor.MoveSteer("AD",-35,100,170,"false")
+    
+    Motor.Move("B",-60,500,"false")
+  EndIf
+  
+  If (slot = 1) Then
+    'Backoff a little bit
+    Motor.StartSteer("AD",max_back_speed,25)
+    Program.Delay(2000)
+    
+    Motor.Start("AD",max_back_speed)
+    
+    While (F.Call1("ISLINE",1) <> 2)
+    EndWhile
    
-   Motor.Move("AD",-35,800,"true")
-   
-   Motor.Move("B",-50,90,"false")
-   F.Call0("RELEASE")  
- EndIf
- 
- If (slot = 2 Or slot = 3) Then
-   Motor.Move("B",60,500,"false")
-   For i = 1 To 180 Step 20 
-     If (F.Call1("ISLINE",1) <> 2) Then
-       Motor.MoveSteer("AD",-35,100,20,"false")
-     Else
-       Motor.Start("AD",50)
-       'Make this to a while loop
-       'WHILE SENSOR FRONT DOESNT DETECT LINE DRIVE FORWARD
-       Program.Delay(100)  
-     EndIf
-   EndFor
- EndIf 
-   
+    
+    Motor.MoveSteer("AD",35,100,120,"false")
+    
+    Motor.Start("AD",40)
+    While (F.Call1("ISLINE",2) <> 1)
+    EndWhile
+    Program.Delay(100)
+    
+    Motor.Stop("AD","true")
+    
+    Motor.Move("B",-50,90,"false")
+    F.Call0("RELEASE")
+    
+    Motor.Start("AD",-35)
+    Program.Delay(500)
+    Motor.stop("AD","false")
+    
+    Motor.MoveSteer("AD",40,-100,340,"false")
+  EndIf
   'TextWindow.WriteLine("First Block Slot "+slot)
   'TextWindow.WriteLine("Slot map now: "+slots_placed)
   'TextWindow.WriteLine("Remaining: "+slots_rest)
@@ -604,10 +651,10 @@ Sub SETSECOND
   If (second_block = slots_rest[1]) Then
     slot = 1
   ElseIf (second_block = slots_rest[2]) Then
-   slot = 2
+    slot = 2
   ElseIf (second_block = slots_rest[3]) Then
-   slot = 3
- ElseIf (second_block = slots_rest[4]) Then
+    slot = 3
+  ElseIf (second_block = slots_rest[4]) Then
     slot = 4
   Else
     If (second_block = 1) Then
@@ -637,7 +684,7 @@ Sub SETSECOND
   slots_placed[slot] = slots_placed[slot] + 1
   
   'TextWindow.WriteLine("Second Block Slot "+slot)
-EndSub 
+EndSub
 
 '-------------------------------------------------------------------
 
@@ -668,40 +715,40 @@ EndSub
 
 Sub LEAVESTART
   'Drive till the first edge
-  Motor.StartSteer("AD",max_speed,0) 
+  Motor.StartSteer("AD",max_speed,0)
   While (F.Call1("ISLINE",2) <> 2)
-  EndWhile  
+  EndWhile
   Motor.Stop("AD","true")
   
   'Turn try #2
   For i = 1 To 360 Step 40
     If (F.Call1("ISLINE",1) <> 2) Then
       Motor.Move("D",-60,-40,"true")
-    Elseif (F.Call1("ISLINE",2) = 2) then
-        i = 1000
+    ElseIf (F.Call1("ISLINE",2) = 2) Then
+      i = 1000
       
-        'Set Straight
-        Motor.Start("D",-65)
-        While (F.Call1("ISLINE",2) = 2)
-        EndWhile
-        Motor.Stop("AD","true")
+      'Set Straight
+      Motor.Start("D",-65)
+      While (F.Call1("ISLINE",2) = 2)
+      EndWhile
+      Motor.Stop("AD","true")
       
     Else
-        i = 1000
-        
-        'Drive to Edge
-        Motor.Start("AD",40)
-        While (F.Call1("ISLINE",2) <> 2)
-        EndWhile
-        Motor.Stop("AD","true") 
+      i = 1000
       
-        'Set Straight
-        Motor.Start("D",-65)
-        While (F.Call1("ISLINE",2) = 2)
-        EndWhile
-        Motor.Stop("AD","true")     
+      'Drive to Edge
+      Motor.Start("AD",40)
+      While (F.Call1("ISLINE",2) <> 2)
+      EndWhile
+      Motor.Stop("AD","true")
+      
+      'Set Straight
+      Motor.Start("D",-65)
+      While (F.Call1("ISLINE",2) = 2)
+      EndWhile
+      Motor.Stop("AD","true")
     EndIf
-  EndFor  
+  EndFor
   
 EndSub
 
@@ -714,11 +761,11 @@ Sub ISLINE
   F.Set("g",Sensor.ReadRawValue(F.Get("port"),1))
   F.Set("b",Sensor.ReadRawValue(F.Get("port"),2))
   If ((F.get("r") + F.get("g") + F.get("b") < 40) Or F.get("r") > 500 Or F.get("g") > 500 Or F.get("b") > 500) Then
-    F.ReturnNumber(2)  
-  ElseIf (F.get("r") < 40 and F.get("g") < 40 and F.get("b") < 40) Then
-    F.ReturnNumber(1)  
+    F.ReturnNumber(2)
+  ElseIf (F.get("r") < 70 and F.get("g") < 70 and F.get("b") < 70) Then
+    F.ReturnNumber(1)
   Else
-    F.ReturnNumber(0)  
+    F.ReturnNumber(0)
   EndIf
 EndSub
 
@@ -729,8 +776,8 @@ EndSub
 F.Start = GRAB
 F.Function("GRAB","")
 Sub GRAB
-   Motor.Move("C",-100,2160,"true")
-   Motor.Wait("C")
+  Motor.Move("C",-100,2160,"true")
+  Motor.Wait("C")
 EndSub
 
 '-------------------------------------------------------------------
@@ -740,10 +787,9 @@ EndSub
 F.Start = RELEASE
 F.Function("RELEASE","")
 Sub RELEASE
-   Motor.Move("C",100,2000,"false")
-   Motor.Wait("C")
+  Motor.Move("C",100,2000,"false")
+  Motor.Wait("C")
 EndSub
-
 
 '##################### Program ######################
 
