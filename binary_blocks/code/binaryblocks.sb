@@ -1,38 +1,53 @@
 'BinaryBlocks Bot that Uses EV3 Basic
-'Copyright (C)  2019  Jannes Kaspar-Müller & Lucas McCully
+'Copyright (C)  2019  Jannes Kaspar-Müller
 
 '################# Important Variables #################
+'Sensor placement
+sensor_front = 1
+sensor_back = 2
+sensor_front_right = 3
+distance_sensor = 4
 
-'The number the robot has to build - Set -1 to activate input phase in input subroutine
-number_to_built = -1
-'Max num of blocks the robot can carry
+'Actor placement
+motor_left = "A"
+motor_left_num = 1
+motor_right = "D"
+motor_right_num = 4
+motor_grab = "C"
+motor_grab_num = 3
+motor_lift = "B"
+motor_lift_num = 2
+
+'Building
+number_to_build = -1
 max_transport_height = 5
-'Minimum acceptable charge of battery in percent
-min_bat = 50
 
-'Maximum forward speed
-max_speed = 40
-'Maximum backward speed
+'Driving
+max_speed = 55
 max_back_speed = -35
+max_turn_speed = 30
+max_wiggle_speed = 40
 
-'Max back turn speed (one wheel turn)
-max_back_turn = -100
+'Other
+min_bat = 50
+claw_status = 0
+claw_height = 0
+block_height = 410
 
-'#################### Functions #####################
+'Sad
+true = "true"
+false = "false"
+right = 1
+left = 2
+back = 3
 
-'go / no go poll
-'Parameters: None
-'Return: Go / No go
-'Possible Errors:
-'                             - Bat: Battery is not charged enough
-'                             - Sens[number1][number2]
-'                                 Sensor Error; number1 = sensor Port; number2 = code
-'                                 number2 -> 1: missing; 2: wrong sensor; 3: couldn't change mode
-'                             -MOT[letter][number]
-'                                 Motor Error: letter = port
-'                                 number:> 1: missing
+motors[1] = "A"
+motors[2] = "B"
+motors[3] = "C"
+motors[4] = "D"
+'##################### Routines ####################
 
-Sub LAUNCH_STATUS_CHECK
+Sub checkLaunchStatus
   'Checklist
   'Variables
   nogo = 0
@@ -72,7 +87,7 @@ Sub LAUNCH_STATUS_CHECK
   motors[4] = "MOTD"
   
   For motor = 1 To 4
-    stat = F.Call1("MOT",motor)
+    stat = F.Call1("checkMotor",motor)
     If (stat = 1) Then
       LCD.write(10,lcd_line,motors[motor]+stat)
       lcd_line = lcd_line + 20
@@ -84,7 +99,7 @@ Sub LAUNCH_STATUS_CHECK
   '#SENS1 #
   '#######
   'Sensor 1, Front Colorsensor
-  sensor1 = F.Call3("SENS",1,29,4)
+  sensor1 = F.Call3("checkSensor",sensor_front,29,4)
   If (sensor1 <> 0) Then
     LCD.write(10,lcd_line,"SENS1"+sensor1)
     lcd_line = lcd_line + 20
@@ -94,7 +109,7 @@ Sub LAUNCH_STATUS_CHECK
   '#######
   '#SENS2#
   '#######
-  sensor2 = F.Call3("SENS",2,29,4)
+  sensor2 = F.Call3("checkSensor",sensor_back,29,4)
   If (sensor2 <> 0) Then
     LCD.write(10,lcd_line,"SENS2"+sensor2)
     lcd_line = lcd_line + 20
@@ -104,7 +119,7 @@ Sub LAUNCH_STATUS_CHECK
   '#######
   '#SENS3#
   '#######
-  sensor3 = F.Call3("SENS",3,30,0)
+  sensor3 = F.Call3("checkSensor",sensor_front_right,29,4)
   If (sensor3 <> 0) Then
     LCD.write(10,lcd_line,"SENS3"+sensor3)
     lcd_line = lcd_line + 20
@@ -114,7 +129,7 @@ Sub LAUNCH_STATUS_CHECK
   '#######
   '#SENS4#
   '#######
-  sensor4 = F.Call3("SENS",4,16,0)
+  sensor4 = F.Call3("checkSensor",distance_sensor,30,0)
   If (sensor4 <> 0) Then
     LCD.write(10,lcd_line,"SENS4"+sensor4)
     lcd_line = lcd_line + 20
@@ -128,100 +143,11 @@ Sub LAUNCH_STATUS_CHECK
     Program.End()
   EndIf
   'Ready for Liftoff
-  Thread.Run = KILLSWITCH
   LCD.BmpFile(1,0,0,"img/liftoff")
 EndSub
 
-'------------------------------------------------------------------------
-
-'Subroutine for the killswitch
-
-Sub KILLSWITCH
-  While (1 = 1)
-    If (Sensor.ReadPercent(4) = 100) Then
-      Program.End()
-    EndIf
-    Program.Delay(50)
-  EndWhile
-EndSub
-'------------------------------------------------------------------------
-
-'Function to check if Motor is attached
-'Parameter: Port
-'Return: true / false
-'Description: Let Motor run slow for 100ms and check if it returns it speed
-
-F.Start = MOT
-F.Function("MOT","port")
-Sub MOT
-  letters[1] = "A"
-  letters[2] = "B"
-  letters[3] = "C"
-  letters[4] = "D"
-  
-  port = letters[F.Get("port")]
-  Motor.Start(port,20)
-  Program.Delay(100)
-  speed = Motor.GetCount(port)
-  Motor.Stop(port,"true")
-  If (speed = 0) Then
-    F.ReturnNumber(1)
-  EndIf
-  F.ReturnNumber(0)
-EndSub
-
-'-----------------------------------------------------------------------
-
-'Function to check if Sensor is attached
-'Parameter: Port, Type
-'Return: true / false
-
-F.START = SENS
-F.Function("SENS","port type mode")
-Sub SENS
-  'Get Parameters
-  num = F.Get("port")
-  type = F.Get("type")
-  mode = F.Get("mode")
-  
-  'Query all data from the sensor
-  real_type = Sensor.getType(num)
-  real_name = Sensor.getName(num)
-  real_mode = Sensor.getMode(num)
-  
-  'Check if Sensor is connected
-  If (real_type = 126) Then
-    'Sensor not connected
-    F.ReturnNumber(1)
-  EndIf
-  
-  'Check if right Sensor is connected
-  If (real_type <> type) Then
-    'Wrong Sensor Connected
-    F.ReturnNumber(2)
-  EndIf
-  
-  'Check if sensor is in right Mode
-  If (real_mode <> mode) Then
-    'TextWindow.WriteLine("Setting Mode")
-    'Set to right mode
-    Sensor.SetMode(num,mode)
-    'Check if mode really switched
-    If (mode <> Sensor.GetMode(num)) Then
-      'TextWindow.WriteLine("Failed")
-      F.ReturnNumber(3)
-    EndIf
-  EndIf
-  F.ReturnNumber(0)
-EndSub
-'-----------------------------------------------------------------------
-
-'Subroutine to convert a decimal number into a binary number
-'Parameters: Number
-'Return: Array with the 4 values
-
-Sub BIN
-  number = Byte.ToBinary(number_to_built)
+Sub bin
+  number = Byte.ToBinary(number_to_build)
   length = Text.GetLength(number)
   
   tmp[1] = Text.GetSubText(number,length,1)
@@ -238,13 +164,7 @@ Sub BIN
   EndFor
 EndSub
 
-'-------------------------------------------------------------------------
-
-'Subroutine to Input all Box Colors
-'Parameters: None
-'Return: Array [color first box; color second box; black boxes outside; white boxes outside]
-
-Sub INPUT
+Sub input
   'To give th user a visual feedback
   EV3.SetLEDColor("RED","normal")
   
@@ -319,15 +239,15 @@ Sub INPUT
   'Inputting the number that we want to build
   '###############################
   
-  If (number_to_built = -1) Then
+  If (number_to_build = -1) Then
     Buttons.Flush()
     Buttons.Wait()
     status = Buttons.Current
     
-    number_to_built = 7
-    BIN()
+    number_to_build = 7
+    bin()
     
-    LCD.Text(1,70,20,2,number_to_built)
+    LCD.Text(1,70,20,2,number_to_build)
     LCD.Text(1,30,50,2,tmp[4])
     LCD.Text(1,50,50,2,tmp[3])
     LCD.Text(1,70,50,2,tmp[2])
@@ -335,15 +255,15 @@ Sub INPUT
     
     While status <> "E"
       status = Buttons.Current
-      If Text.IsSubText(status, "U") And (number_to_built < 15) Then
+      If Text.IsSubText(status, "U") And (number_to_build < 15) Then
         Buttons.Flush()
-        number_to_built = number_to_built + 1
-      ElseIf Text.IsSubText(status, "D") and (number_to_built > -1) Then
+        number_to_build = number_to_build + 1
+      ElseIf Text.IsSubText(status, "D") and (number_to_build > -1) Then
         Buttons.Flush()
-        number_to_built = number_to_built - 1
+        number_to_build = number_to_build - 1
       EndIf
-      BIN()
-      LCD.Text(1,70,20,2,number_to_built)
+      bin()
+      LCD.Text(1,70,20,2,number_to_build)
       LCD.Text(1,30,50,2,tmp[4])
       LCD.Text(1,50,50,2,tmp[3])
       LCD.Text(1,70,50,2,tmp[2])
@@ -361,11 +281,7 @@ Sub INPUT
   
 EndSub
 
-'------------------------------------------------------------------------
-
-'Function to produce an array with the block placement
-
-Sub SORT
+Sub sort
   'Find out the total number of black blocks and the total number of white blocks
   
   total_black = blacks
@@ -433,10 +349,7 @@ Sub SORT
   
 EndSub
 
-'-------------------------------------------------------------------
-
-'Function to output the blocks on the display
-Sub SHOW
+Sub show
   LCD.Clear()
   
   startX = 100
@@ -462,17 +375,13 @@ Sub SHOW
   EndFor
 EndSub
 
-'-------------------------------------------------------------------
-
-'Function to set First Block
-
-Sub SETFIRST
-  If (first_block = slots[3]) Then
-    slot = 3
+Sub calcFirst
+  If (first_block = slots[4]) Then
+    slot = 4
   ElseIf (first_block = slots[2] and second_block = slots[1]) Then
     slot = 2
-  ElseIf (first_block = slots[4]) Then
-    slot = 4
+  ElseIf (first_block = slots[3]) Then
+    slot = 3
   ElseIf (first_block = slots[2]) Then
     slot = 2
   ElseIf (first_block = slots[1]) Then
@@ -481,22 +390,22 @@ Sub SETFIRST
     If (first_block = 1) Then
       If (first_block < slots[4]) Then
         slot = 4
-      ElseIf (first_block < slots[1]) Then
-        slot = 1
       ElseIf (first_block < slots[3]) Then
         slot = 3
       ElseIf (first_block < slots[2]) Then
         slot = 2
+      ElseIf (first_block < slots[1]) Then
+        slot = 1
       EndIf
     Else
       If (first_block > slots[4]) Then
         slot = 4
-      ElseIf (first_block > slots[1]) Then
-        slot = 1
       ElseIf (first_block > slots[3]) Then
         slot = 3
       ElseIf (first_block > slots[2]) Then
         slot = 2
+      ElseIf (first_block > slots[1]) Then
+        slot = 1
       EndIf
     EndIf
   EndIf
@@ -504,150 +413,199 @@ Sub SETFIRST
   slots_rest[slot] = slots_rest[slot] - first_block
   slots_placed[slot] = 1
   
-  LEAVESTART()
-  
-  Program.Delay(200)
-  
-  'Wiggle
-  While (Sensor.ReadRawValue(3,0) > 54)
-    drive_speed = 40
-    While (F.Call1("ISLINE",2) = 2 And Sensor.ReadRawValue(3,0) > 54)
-      Motor.StartSteer("AD",drive_speed,30)
-    EndWhile
-    While (F.Call1("ISLINE",2) <> 2  And Sensor.ReadRawValue(3,0) > 54)
-      Motor.StartSteer("AD",drive_speed,-7)
-    EndWhile
-  EndWhile
-  Motor.Stop("AD","true")
-  
-  'Grab block
-  F.Call0("GRAB")
-  Motor.Move("B",50,100,"true")
-  
-  'Drive till black Line
-  time = 0
-  line = "false"
-  While (line = "false")
-    If (F.Call1("ISLINE",2) <> 0) Then
-      If (EV3.Time < (time + 500)) Then
-        line = "true"
-      EndIf
-      Motor.StartSteer("AD",35,30)
-    ElseIf (F.Call1("ISLINE",2) = 0) Then
-      Motor.StartSteer("AD",35,-7)
-    EndIf
-    If (F.Call1("ISLINE",1) = 1) Then
-      time = EV3.Time
-    EndIf
-  EndWhile
-  Motor.Stop("AD","true")
-  
-  'We are now standing with the robot in slot 4
-  If (slot = 4) Then
-    'Backoff
-    Motor.StartSteer("AD",max_back_speed,10)
-    Program.Delay(900)
-    Motor.Stop("AD","true")
-    
-    'Place Block
-    Motor.Move("B",-50,90,"false")
-    F.Call0("RELEASE")
-    
-    'Move back
-    Motor.StartSteer("AD",max_back_speed,-5)
-    Program.Delay(500)
-    Motor.Stop("AD","true")
-    
-    'Rotate
-    Motor.MoveSteer("AD",max_speed,100,200,"false")
-    
-    Motor.StartSync("AD",max_speed,max_speed)
-    While (F.Call1("ISLINE",2) <> 2)
-    EndWhile
-    Motor.Stop("AD","false")
-    
-  ElseIf (slot = 3) Then
-    'Place block in second slot
-    
-    'Turn around
-    Motor.Move("A",-60,395,"true")
-    
-    'Back to slot 2
-    Motor.Move("AD",-35,400,"true")
-    
-    'Release block into slot 2
-    Motor.Move("B",-50,80,"false")
-    F.Call0("RELEASE")
-    
-    'Back to the edge
-    Motor.Start("AD",-35)
-    While (F.Call1("ISLINE",1) <> 2)
-    EndWhile
-    Motor.stop("AD","false")
-    
-    'Tuuurrnn aroouuuunndd
-    Motor.MoveSteer("AD",-35,100,170,"false")
-    
-  ElseIf (slot = 2) Then
-    'Place block in second slot
-    For i = 1 To 360 Step 40
-      Motor.Move("A",-60,40,"true")
-    EndFor
-    
-    Motor.Move("AD",-35,750,"true")
-    
-    Motor.Move("B",-50,90,"false")
-    F.Call0("RELEASE")
-    
-    Motor.Start("AD",-35)
-    While (F.Call1("ISLINE",1) <> 2)
-    EndWhile
-    Motor.stop("AD","false")
-    
-    Motor.Move("B",60,500,"false")
-    
-    Motor.MoveSteer("AD",-35,100,170,"false")
-    
-    Motor.Move("B",-60,500,"false")
-  EndIf
-  
-  If (slot = 1) Then
-    'Backoff a little bit
-    Motor.StartSteer("AD",max_back_speed,25)
-    Program.Delay(2000)
-    
-    Motor.Start("AD",max_back_speed)
-    
-    While (F.Call1("ISLINE",1) <> 2)
-    EndWhile
-   
-    
-    Motor.MoveSteer("AD",35,100,120,"false")
-    
-    Motor.Start("AD",40)
-    While (F.Call1("ISLINE",2) <> 1)
-    EndWhile
-    Program.Delay(100)
-    
-    Motor.Stop("AD","true")
-    
-    Motor.Move("B",-50,90,"false")
-    F.Call0("RELEASE")
-    
-    Motor.Start("AD",-35)
-    Program.Delay(500)
-    Motor.stop("AD","false")
-    
-    Motor.MoveSteer("AD",40,-100,340,"false")
-  EndIf
-  'TextWindow.WriteLine("First Block Slot "+slot)
-  'TextWindow.WriteLine("Slot map now: "+slots_placed)
-  'TextWindow.WriteLine("Remaining: "+slots_rest)
+  first_block_slot = slot
 EndSub
 
-'Function to set second block
+Sub placeFirst
+  'Drive out of start Area
+  F.Call1("driveToEdge",max_speed)
+  Program.Delay(300)
+  
+  'Hop back to be safe
+  F.Call2("makeHop",max_back_speed,300)
+  Program.Delay(300)
+  
+  'Make a 90° turn to the right
+  F.Call3("turnDegrees",max_turn_speed,93,right)
+  Program.Delay(300)
+  
+  'Drive along edge until in front of block
+  F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front,left,3,distance_sensor)
+  
+  'Close claw
+  F.Call0("closeClaw")
+  
+  'Lift
+  F.Call1("liftTo",1)
+  
+  'Drive along edge until black line detected
+  F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front,left,1,sensor_front_right)
+  
+  If (first_block_slot = 4) Then
+    'drive a tiny bit forward
+    F.Call2("makeHop",max_speed,150)
+    Program.Delay(100)
+    
+    'Turn a bit to the left
+    F.Call3("turnDegrees",max_turn_speed,5,left)
+    
+    'Set block
+    F.Call1("liftTo",0)
+    F.Call0("openClaw")
+    
+    'Turn a bit to the right
+    F.Call3("turnDegrees",max_turn_speed,5,left)
+    Program.Delay(100)
+    
+    'Backoff
+    F.Call2("makeHop",max_back_speed,300)
+    
+    'Pull up claw to level 1
+    F.Call1("liftTo",1)
+    
+    'Turn 90°
+    F.Call3("turnDegrees",max_turn_speed,90,right)
+    Program.Delay(200)
+    
+    'Drive down
+    F.Call1("driveToEdge",max_speed)
+    Program.Delay(200)
+    
+    'Hop Back
+    F.Call2("makeHop",max_back_speed,200)
+    Program.Delay(300)
+    
+    '90° turn
+    F.Call3("turnDegrees",max_turn_speed,90,right)
+    
+    'claw down
+    F.Call1("liftTo",0)
+  Else
+    Motor.StartSteer("AD",55,28)
+    Program.Delay(1300)
+    Motor.Stop("AD","true")
+    Program.Delay(200)
+    
+    If (first_block_slot = 3 ) Then
+      'hop back
+      Motor.Start("AD",max_back_speed)
+      While (F.Call1("isLine",sensor_back) <> 2)
+      EndWhile
+      Motor.Stop("AD","true")
+      
+      'hop forward
+      Motor.Start("AD",max_speed)
+      While (F.Call1("isLine",sensor_back) = 2)
+      EndWhile
+      Motor.Stop("AD","true")
+      
+      'Adjust
+      Motor.StartSteer("AD",max_turn_speed,100)
+      While (F.Call1("isLine",sensor_front) = 2)
+      EndWhile
+      Motor.Stop("AD","true")
+      
+      'Set block
+      F.Call1("liftTo",0)
+      F.Call0("openClaw")
+      
+      'hop back
+      Motor.Start("AD",max_back_speed)
+      While (F.Call1("isLine",sensor_back) <> 2)
+      EndWhile
+      Program.Delay(100)
+      Motor.Stop("AD","true")
+      
+      'Lift claw so it will not push block down
+      F.Call1("liftTo",1)
+      
+      'Turn 90°
+      F.Call3("turnDegrees",max_turn_speed,90,right)
+      
+      'Gain some depth
+      F.Call2("makeHop",max_speed,750)
+      Program.Delay(300)
+      
+      'Turn 90°
+      F.Call3("turnDegrees",max_turn_speed,88,left)
+    ElseIf (first_block_slot <> 3) Then
+      'Drive back to align
+      Motor.Start("AD",-35)
+      Program.Delay(400)
+      Motor.Stop("AD","true")
+      
+      'Left sensor over table, that right sensor is not black
+      Motor.StartSteer("AD",max_turn_speed,-50)
+      While (F.Call1("IsLine",sensor_front) <> 2)
+      EndWhile
+      Motor.Stop("AD","true")
+      
+      For i=2 To 5-first_block_slot
+        'Drive to slot
+        F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front,left,1,sensor_front_right)
+        
+        If (first_block_slot = 1 and i = 3) Then
+          'align
+          Program.Delay(200)
+          Motor.StartSteer("AD",20,-50)
+          While (F.Call1("IsLine",sensor_front) <> 2)
+          EndWhile
+          Motor.Stop("AD","true")
+        EndIf
+      EndFor
+      
+      If F.Call1("isLine",sensor_back) = 2 Then
+        'align
+        Motor.Start("A",-10)
+        While (F.Call1("isLine",sensor_back) = 2)
+        EndWhile
+        Motor.Stop("A","true")
+      ElseIf F.Call1("isLine",sensor_front) = 2 Then
+        Motor.Start("A",10)
+        While (F.Call1("isLine",sensor_front) = 2)
+        EndWhile
+        Motor.Stop("A","true")
+      EndIf
+      
+      'hop to the front
+      F.Call2("makeHop",max_speed,200)
+      
+      'Set block
+      F.Call1("liftTo",0)
+      F.Call0("openClaw")
+      F.Call2("makeHop",max_back_speed,200)
+      
+      F.Call1("liftTo",1)
+      
+      'Back off and turn
+      Motor.ScheduleSteer("AD",max_back_speed,40,450,"true")
+      Motor.Wait("A")
+      Program.Delay(200)
+      Motor.Move("AD",max_back_speed,250,"true")
+      Program.Delay(200)
+      
+      'Turn 90°
+      F.Call3("turnDegrees",max_turn_speed,85,right)
+    EndIf
+    
+    'Drive down
+    F.Call1("driveToEdge",max_speed)
+    Program.Delay(200)
+    
+    'Hop Back
+    F.Call2("makeHop",max_back_speed,200)
+    Program.Delay(200)
+    
+    '90° turn
+    F.Call3("turnDegrees",max_turn_speed,85,right)
+    
+    'claw down
+    F.Call1("liftTo",0)
+  EndIf
+  
+EndSub
 
-Sub SETSECOND
+Sub calcSecond
   If (second_block = slots_rest[1]) Then
     slot = 1
   ElseIf (second_block = slots_rest[2]) Then
@@ -683,80 +641,375 @@ Sub SETSECOND
   slots_rest[slot] = slots_rest[slot] - second_block
   slots_placed[slot] = slots_placed[slot] + 1
   
-  'TextWindow.WriteLine("Second Block Slot "+slot)
+  second_block_slot = slot
 EndSub
 
-'-------------------------------------------------------------------
-
-'Function to set all remaining blocks
-
-Sub SETREST
-  For i=1 To 4
-    If (slots_rest[i] <> 0) Then
-      tobring = slots_rest[i]
+Sub placeSecond
+  'Drive till block found
+  F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front,left,3,distance_sensor)
+  
+  'Pick it up
+  F.Call0("closeClaw")
+  If (second_block_slot = first_block_slot) Then
+    F.Call1("liftTo",2)
+  Else
+    F.Call1("liftTo",1)
+  EndIf
+  
+  If (second_block_slot <= first_block_slot) Then
+    '180° turn
+    F.Call3("turnDegrees",max_turn_speed,170,right)
+    
+    'Drive till black line detected
+    F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front_right,right,1,sensor_front)
+    
+    If (second_block_slot = 1) Then
+      'drive a tiny bit forward
+      F.Call2("makeHop",max_speed,150)
+      Program.Delay(100)
       
-      If (tobring < 0) Then
-        drives = Math.Ceiling(tobring*-1 / max_transport_height)
-        color = "black"
-        tobring = tobring * -1
+      'Set block
+      If (second_block_slot = first_block_slot) Then
+        F.Call1("liftTo",1)
       Else
-        color = "white"
-        drives = Math.Ceiling(tobring / max_transport_height)
+        F.Call1("liftTo",0)
+      EndIf
+      F.Call0("openClaw")
+      
+      'drive backwards
+      F.Call2("makeHop",max_back_speed,400)
+      Program.Delay(200)
+      
+      '90° turn to top of table
+      F.Call3("turnDegrees",max_turn_speed,90,left)
+      
+      'Drive till at edge
+      F.Call1("driveToEdge",max_speed)
+      Program.Delay(200)
+    
+      'Back off
+      F.Call2("makeHop",max_back_speed,300)
+      Program.Delay(200)
+      
+      '90° turn
+      F.Call3("turnDegrees",max_turn_speed,90,left)
+      
+      'Now ready to wiggle home ->
+      F.Call1("liftTo",0)
+    ElseIf (second_block_slot = 2) Then
+      'Turn 90° left
+      F.Call3("turnDegrees",max_turn_speed,90,left)
+      Program.Delay(200)
+      
+      'Drive till parallel to slot 2
+      F.Call2("makeHop",max_speed,600)
+      Program.Delay(300)
+      
+      'Turn 90° right
+      F.Call3("turnDegrees",max_turn_speed,95,right)
+      Program.Delay(300)
+      
+      'Set block
+      If (second_block_slot = first_block_slot) Then
+        'Slowly and carefully approach block
+        Motor.Start("AD",20)
+        While (Sensor.ReadRawValue(distance_sensor,0) > 60)
+        EndWhile
+        Motor.Stop("AD","true")
+        F.Call1("liftTo",1)
+      Else
+        Program.Delay(300)
+        F.Call2("makeHop",max_speed,250)
+        F.Call1("liftTo",0)
+      EndIf
+      F.Call0("openClaw")
+      
+      'Hop back
+      F.Call2("makeHop",max_back_speed,500)
+      
+      '90° turnDegrees
+      F.Call3("turnDegrees",max_turn_speed,90,left)
+      Program.Delay(200)
+      
+      'Drive till at edge
+      F.Call1("driveToEdge",max_speed)
+      Program.Delay(200)
+    
+      'Back off
+      F.Call2("makeHop",max_back_speed,300)
+      Program.Delay(200)
+      
+      '90° turn
+      F.Call3("turnDegrees",max_turn_speed,90,left)
+      F.Call1("liftTo",0)
+      
+      'Drive home ->
+    ElseIf (second_block_slot = 3 or second_block_slot = 4) Then
+      'TUrn into slot 2
+      Motor.StartSteer("AD",55,-28)
+      Program.Delay(1300)
+      Motor.Stop("AD","true")
+      Program.Delay(200)
+      
+      If (second_block_slot = 3 and second_block_slot <> first_block_slot) Then
+        'Drive till in front of block
+        F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front_right,right,5,distance_sensor)
+        Motor.Start("AD",max_back_speed)
+        While (Sensor.ReadRawValue(distance_sensor,0) < 220)
+        EndWhile
+        Motor.Stop("AD",true)
+        
+        F.Call1("liftTo",0)
+        F.Call0("openClaw")
+      Else
+        F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front_right,right,3,distance_sensor)
+        Motor.Start("AD",max_back_speed)
+        While (Sensor.ReadRawValue(distance_sensor,0) < 55)
+        EndWhile
+        Motor.Stop("AD",true)
+        
+        'set block
+        F.Call1("liftTo",1)
+        F.Call0("openClaw")
       EndIf
       
-      'TextWindow.WriteLine("Drive "+drives+" times to "+i+" and bring "+tobring+" "+color+" blocks")
+      'Drive back 
+      F.Call2("makeHop",max_back_speed,800)
+      
+      '90° turnDegrees
+      F.Call3("turnDegrees",max_turn_speed,90,left)
+      Program.Delay(200)
+      
+      'Gain some depth
+      F.Call2("makeHop",max_speed,1000)
+      
+      '90° turnDegrees
+      F.Call3("turnDegrees",max_turn_speed,90,right)
+      Program.Delay(200)
+      
+      'Drive till at edge
+      F.Call1("driveToEdge",max_speed)
+      Program.Delay(200)
+    
+      'Back off
+      F.Call2("makeHop",max_back_speed,300)
+      Program.Delay(200)
+      
+      '90° turn
+      F.Call3("turnDegrees",max_turn_speed,90,left)
+      
+      'Drive home ->
     EndIf
-  EndFor
+  Else
+    '90° turn
+    F.Call3("turnDegrees",max_turn_speed,90,right)
+    Program.Delay(200)
+    
+    'Drive to other side
+    F.Call1("driveToEdge",max_speed)
+    Program.Delay(200)
+    
+    'Back off
+    F.Call2("makeHop",max_back_speed,300)
+    Program.Delay(200)
+    
+    '90° turn
+    F.Call3("turnDegrees",max_turn_speed,90,right)
+    Program.Delay(200)
+    
+    'Drive till first slot
+    F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front,left,1,sensor_front_right)
+    
+    If (second_block_slot = 4) Then
+      'drive a tiny bit forward
+      F.Call2("makeHop",max_speed,150)
+      Program.Delay(100)
+      
+      'Turn a bit to the left
+      F.Call3("turnDegrees",max_turn_speed,5,left)
+      
+      'Set block
+      F.Call1("liftTo",0)
+      F.Call0("openClaw")
+      
+      'Turn a bit to the right
+      F.Call3("turnDegrees",max_turn_speed,5,left)
+      Program.Delay(100)
+      
+      'Backoff
+      F.Call2("makeHop",max_back_speed,600)
+      
+      'Turn 180°
+      F.Call3("turnDegrees",max_turn_speed,180,left)
+      Program.Delay(200)
+      
+      'Ready to drive home-->
+    ElseIf (second_block_slot = 3) Then
+      Motor.StartSteer("AD",55,28)
+      Program.Delay(1300)
+      Motor.Stop("AD","true")
+      Program.Delay(200)
+      
+      'hop back
+      Motor.Start("AD",max_back_speed)
+      While (F.Call1("isLine",sensor_back) <> 2)
+      EndWhile
+      Motor.Stop("AD","true")
+      
+      'hop forward
+      Motor.Start("AD",max_speed)
+      While (F.Call1("isLine",sensor_back) = 2)
+      EndWhile
+      Motor.Stop("AD","true")
+      
+      'Adjust
+      Motor.StartSteer("AD",max_turn_speed,100)
+      While (F.Call1("isLine",sensor_front) = 2)
+      EndWhile
+      Motor.Stop("AD","true")
+      
+      'Set block
+      F.Call1("liftTo",0)
+      F.Call0("openClaw")
+      
+      'hop back
+      Motor.Start("AD",max_back_speed)
+      While (F.Call1("isLine",sensor_back) <> 2)
+      EndWhile
+      Program.Delay(100)
+      Motor.Stop("AD","true")
+      
+      'Lift claw so it will not push block down
+      F.Call1("liftTo",1)
+      
+      'Turn 90°
+      F.Call3("turnDegrees",max_turn_speed,90,right)
+      
+      'Drive home -->
+    ElseIf (second_block_slot = 2) Then
+      Motor.StartSteer("AD",55,28)
+      Program.Delay(1300)
+      Motor.Stop("AD","true")
+      Program.Delay(200)
+      
+      F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front,left,5,distance_sensor)
+      F.Call1("liftTo",0)
+      F.Call0("openClaw")
+      
+      'hop back
+      F.Call2("makeHop",max_back_speed,600)
+      Program.Delay(200)
+      
+      '90° turn
+      F.Call3("turnDegrees",max_turn_speed,90,right)
+      Program.Delay(200)
+      
+      'gain depth
+      F.Call2("makeHop",max_speed,600)
+      Program.Delay(200)
+      
+      '90° turn
+      F.Call3("turnDegrees",max_turn_speed,90,right)
+      Program.Delay(200)
+      
+      'Drive till edge
+      F.Call1("driveToEdge",max_speed)
+      
+      'Back off
+      F.Call2("makeHop",max_back_speed,300)
+      Program.Delay(200)
+      
+      '90° turn
+      F.Call3("turnDegrees",max_turn_speed,90,left)
+      
+      '--> drive home
+    EndIf
+  EndIf
+  '-------------> Drive home 
+  'MUST BE TESTED
+  'Claw down
+  F.Call1("liftTo",0)
+  
+  'Drive along edge
+  F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front,left,2,sensor_front_right)
+  
+  '90° turn
+  F.Call3("turnDegrees",max_turn_speed,90,left)
+  
+  'Drive into start area
+  F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front,left,2,sensor_front_right)
 EndSub
 
-'-------------------------------------------------------------------
-
-'FUnction to leave the start area and align to edge
-
-Sub LEAVESTART
-  'Drive till the first edge
-  Motor.StartSteer("AD",max_speed,0)
-  While (F.Call1("ISLINE",2) <> 2)
-  EndWhile
-  Motor.Stop("AD","true")
-  
-  'Turn try #2
-  For i = 1 To 360 Step 40
-    If (F.Call1("ISLINE",1) <> 2) Then
-      Motor.Move("D",-60,-40,"true")
-    ElseIf (F.Call1("ISLINE",2) = 2) Then
-      i = 1000
-      
-      'Set Straight
-      Motor.Start("D",-65)
-      While (F.Call1("ISLINE",2) = 2)
-      EndWhile
-      Motor.Stop("AD","true")
-      
-    Else
-      i = 1000
-      
-      'Drive to Edge
-      Motor.Start("AD",40)
-      While (F.Call1("ISLINE",2) <> 2)
-      EndWhile
-      Motor.Stop("AD","true")
-      
-      'Set Straight
-      Motor.Start("D",-65)
-      While (F.Call1("ISLINE",2) = 2)
-      EndWhile
-      Motor.Stop("AD","true")
-    EndIf
-  EndFor
-  
+'#################### Functions #####################
+F.Start = makeHop
+F.Function("makeHop","speed time")
+Sub makeHop
+  Motor.Start("AD",F.Get("speed"))
+  Program.delay(F.Get("time"))
+  Motor.Stop("AD",true)
 EndSub
 
-'Function to fetch & evaluate sensor results
+F.Start = checkMotor
+F.Function("checkMotor","port")
+Sub checkMotor
+  letters[1] = "A"
+  letters[2] = "B"
+  letters[3] = "C"
+  letters[4] = "D"
+  
+  port = letters[F.Get("port")]
+  Motor.Start(port,20)
+  Program.Delay(100)
+  speed = Motor.GetCount(port)
+  Motor.Stop(port,"true")
+  If (speed = 0) Then
+    F.ReturnNumber(1)
+  EndIf
+  F.ReturnNumber(0)
+EndSub
 
-F.Start = ISLINE
-F.Function("ISLINE","port r g b")
-Sub ISLINE
+F.Start = checkSensor
+F.Function("checkSensor","port type mode")
+Sub checkSensor
+  'Get Parameters
+  num = F.Get("port")
+  type = F.Get("type")
+  mode = F.Get("mode")
+  
+  'Query all data from the sensor
+  real_type = Sensor.getType(num)
+  real_name = Sensor.getName(num)
+  real_mode = Sensor.getMode(num)
+  
+  'Check if Sensor is connected
+  If (real_type = 126) Then
+    'Sensor not connected
+    F.ReturnNumber(1)
+  EndIf
+  
+  'Check if right Sensor is connected
+  If (real_type <> type) Then
+    'Wrong Sensor Connected
+    F.ReturnNumber(2)
+  EndIf
+  
+  'Check if sensor is in right Mode
+  If (real_mode <> mode) Then
+    'TextWindow.WriteLine("Setting Mode")
+    'Set to right mode
+    Sensor.SetMode(num,mode)
+    'Check if mode really switched
+    If (mode <> Sensor.GetMode(num)) Then
+      'TextWindow.WriteLine("Failed")
+      F.ReturnNumber(3)
+    EndIf
+  EndIf
+  F.ReturnNumber(0)
+EndSub
+
+F.Start = isLine
+F.Function("isLine","port r g b")
+Sub isLine
   F.Set("r",Sensor.ReadRawValue(F.Get("port"),0))
   F.Set("g",Sensor.ReadRawValue(F.Get("port"),1))
   F.Set("b",Sensor.ReadRawValue(F.Get("port"),2))
@@ -769,40 +1022,157 @@ Sub ISLINE
   EndIf
 EndSub
 
-'-------------------------------------------------------------------
-
-'Function to grab a block
-
-F.Start = GRAB
-F.Function("GRAB","")
-Sub GRAB
-  Motor.Move("C",-100,2160,"true")
-  Motor.Wait("C")
+F.Start = driveToEdge
+F.Function("driveToEdge","speed sensor motor direction")
+Sub driveToEdge
+  'Drive until edge detected
+  Motor.Start("AD",F.Get("speed"))
+  While (F.Call1("IsLine",sensor_front) <> 2 and F.Call1("IsLine",sensor_front_right) <> 2)
+  EndWhile
+  Motor.Stop("AD","true")
+  
+  'Check if both motors are over the edge
+  If (F.Call1("IsLine",sensor_front) <> 2 or F.Call1("IsLine",sensor_front_right) <> 2) Then
+    If (F.Call1("IsLine",sensor_front) <> 2) Then
+      'Sensor1 not over the edge
+      F.Set("sensor",1)
+      F.Set("direction",50)
+      F.Set("motor",motor_left_num)
+    Else
+      'Sensor 2 not over the edge
+      F.Set("sensor",sensor_front_right)
+      F.Set("direction",-50)
+      F.Set("motor",motor_right_num)
+    EndIf
+    
+    'Start the Motors until aligned
+    Motor.Start(Motors[F.Get("motor")],max_speed)
+    While (F.Call1("IsLine",F.Get("Sensor")) <> 2)
+    EndWhile
+    Motor.Stop("AD","true")
+  EndIf
 EndSub
 
-'-------------------------------------------------------------------
-
-'Function to release a block
-
-F.Start = RELEASE
-F.Function("RELEASE","")
-Sub RELEASE
-  Motor.Move("C",100,2000,"false")
-  Motor.Wait("C")
+F.Start = turnDegrees
+F.Function("turnDegrees","speed degrees turn")
+Sub turnDegrees
+  'Adjust degree conversion
+  'For example 360 degree turn might end up just beeing 330°
+  If (F.Get("turn") = right) Then
+    F.Set("turn",100)
+  Else
+    F.Set("turn",-100)
+  EndIf
+  
+  Motor.MoveSteer("AD",F.Get("speed"),F.Get("turn"),F.Get("degrees")*2,"true")
 EndSub
 
-'##################### Program ######################
+F.Start = driveAlongEdge
+F.Function("driveAlongEdge","speed sensor side mode port drive")
+Sub driveAlongEdge
+  F.Set("drive",0)
+  
+  'Check which sensor it is wiggling with and in which direction
+  'Direction 0 means "normal"
+  If (F.Get("side") = right) Then
+    'Direction 1 means right sensor
+    F.Set("side",-1)
+  ElseIf (F.Get("side") = left) Then
+    F.Set("side",1)
+  ElseIf (F.Get("side") = back) Then
+    F.Set("speed",F.Get("speed")*-1)
+    F.Set("side",1)
+  EndIf
+  
+  While (F.Get("drive") = 0)
+    If (F.Get("mode") = 1) Then
+      'Drive until black line reached
+      If (F.Call1("IsLine",F.Get("port")) = 1) Then
+        F.Set("drive",1)
+      EndIf
+    ElseIf (F.Get("mode") = 2) Then
+      'Drive until end of the table
+      If (F.Call1("IsLine",F.Get("port")) = 2) Then
+        F.Set("drive",1)
+      EndIf
+    ElseIf (F.Get("mode") = 3) Then
+      'Drive until block reached
+      If (Sensor.ReadRawValue(F.Get("port"),0) < 45) Then
+        F.Set("drive",1)
+      ElseIf (Sensor.ReadRawValue(F.Get("port"),0) < 80) Then
+        F.Set("speed",18)
+      EndIf
+    ElseIf (F.Get("mode") = 4) Then
+      'Special mode to drive into slot 4 stopping when sensor front over table and sensor back black
+      If (F.Call1("IsLine",sensor_front) = 2 and F.Call1("IsLine",sensor_back) = 1) or (F.Call1("IsLine",sensor_front_right) = 3) Then
+        F.Set("drive",1)
+      EndIf
+    ElseIf (F.Get("mode") = 5) Then
+      If (Sensor.ReadRawValue(F.Get("port"),0) < 220) Then
+        F.Set("drive",1)
+      EndIf
+    EndIf
+    'Wiggle function
+    If (F.Call1("IsLine",F.Get("sensor")) = 0) Then
+      'Drive left
+      Motor.StartSteer("AD",F.Get("speed"),-7*F.Get("side"))
+    EndIf
+    If (F.Call1("IsLine",F.Get("sensor")) <> 0) Then
+      'Drive right
+      Motor.StartSteer("AD",F.Get("speed"),25*F.Get("side"))
+    EndIf
+  EndWhile
+  'And finished
+  Motor.Stop("AD","true")
+EndSub
 
-LAUNCH_STATUS_CHECK() 'Check if everything operational
-INPUT()               'Get Box Colors/Amounts
-BIN()                 'Convert the number to decimal
-SORT()                'Make Plan
-SHOW()                'Show Plan
+F.Start = closeClaw
+F.Function("closeClaw","initial")
+Sub closeClaw
+  F.Set("initial",Motor.GetCount(motor_grab))
+  Motor.Start(motor_grab,-100)
+  Program.Delay(300)
+  While (Motor.GetSpeed(motor_grab) < -45)
+  EndWhile
+  Motor.Stop(motor_grab,"true")
+  claw_status = -1*Motor.GetCount(motor_grab)-F.Get("initial")
+EndSub
+
+F.Start = openClaw
+F.Function("openClaw","degrees")
+Sub openClaw
+  Motor.Move("C",100,claw_status,"true")
+  claw_status = 0
+EndSub
+
+F.Start = liftTo
+F.Function("liftTo","floor")
+Sub liftTo
+  If (F.Get("floor") > claw_height) Then
+    Motor.Move(motor_lift,100,(F.Get("floor")-claw_height)*block_height,"true")
+  Else
+    Motor.Move(motor_lift,-100,(F.Get("floor")-claw_height)*block_height,"true")
+  EndIf
+  claw_height = F.Get("floor")
+EndSub
+
+'################ Sandbox area ###############
+
+checkLaunchStatus()
+input()
+sort()
+show()
 Program.Delay(1000)
-SETFIRST()            'Set first block
-SETSECOND()           'Set second block
-SETREST()             'Set all other blocks
-'LEAVESTART()
-'TextWindow.WriteLine(return)
-'LCD.Write(10,10,return[3]+return[2]+return[1]+return[0])
-Program.Delay(10000)
+calcFirst()
+placeFirst()
+calcSecond()
+placeSecond()
+'F.Call1("driveToEdge",max_speed)
+'F.Call3("turnDegrees",max_turn_speed,180,"right")
+'F.Call5("driveAlongEdge",max_wiggle_speed,sensor_front,"left",3,distance_sensor)
+'F.Call0("closeClaw")
+'F.Call0("openClaw")
+'F.Call1("liftTo",1)
+'F.Call1("liftTo",0)
+'F.Call1("liftTo",2)
+'F.Call1("liftTo",0)
